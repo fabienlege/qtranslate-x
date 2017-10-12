@@ -262,7 +262,7 @@ function qtranxf_add_language_menu_item(&$items, &$menu_order, &$itemid, $key, $
 	}
 	if($topflag){
 		if(!empty($item->title)){
-			if($colon) $item->title.=_x(':', 'Colon after a title. For example, in top item of Language Menu.', 'qtranslate');
+			if($colon) $item->title .= qtranxf_translate(':');
 			$item->title.='&nbsp;';
 		}
 		$item->title.='<img src="'.$flag_location.$q_config['flag'][$toplang].'" alt="'.$q_config['language_name'][$toplang].'" />';//.' '.__('Flag', 'qtranslate')
@@ -389,6 +389,7 @@ function qtranxf_translate_deep($value,$lang){
 		}
 	}else if(is_object($value) || $value instanceof __PHP_Incomplete_Class){
 		foreach(get_object_vars($value) as $k => $v) {
+			if(!isset($value->$k)) continue;
 			$value->$k = qtranxf_translate_deep($v,$lang);
 		}
 	}
@@ -467,8 +468,24 @@ function qtranxf_filter_options(){
 qtranxf_filter_options();
 
 /**
+ * @since 3.4.7
+ */
+function qtranxf_translate_object_property( $lang, $txt, $key, $post, $show_available, $show_empty) {
+	$blocks = qtranxf_get_language_blocks($txt);
+	if( count($blocks) <= 1 )
+		return; //value is not multilingual
+	$key_ml = $key.'_ml';
+	$post->$key_ml = $txt;
+	$langs = array();
+	$content = qtranxf_split_blocks($blocks,$langs);
+	$post->$key = qtranxf_use_content($lang, $content, $langs, $show_available, $show_empty);
+	$key_langs = $key.'_langs';
+	$post->$key_langs = $langs;
+}
+
+/**
  * @since 3.4.6.5
-*/
+ */
 function qtranxf_translate_post($post,$lang) {
 	foreach(get_object_vars($post) as $key => $txt) {
 		switch($key){//the quickest way to proceed
@@ -495,10 +512,12 @@ function qtranxf_translate_post($post,$lang) {
 			case 'filter':
 				continue;
 			//known to translate
-			case 'post_content': $post->$key = qtranxf_use_language($lang, $txt, true); break;
-			case 'post_title':
+			case 'post_content': qtranxf_translate_object_property($lang,$txt,$key,$post,true,false); break;
+				// $post->$key = qtranxf_use_language($lang, $txt, true); break;
 			case 'post_excerpt':
 			case 'post_content_filtered'://not sure how this is in use
+			case 'post_title': qtranxf_translate_object_property($lang,$txt,$key,$post,false,false); break;
+/*
 			{
 				$blocks = qtranxf_get_language_blocks($txt);
 				if(count($blocks)>1){//value is multilingual
@@ -512,6 +531,7 @@ function qtranxf_translate_post($post,$lang) {
 					$post->$key_langs = $langs;
 				}
 			} break;
+*/
 			//other maybe, if it is a string, most likely it never comes here
 			default:
 				$post->$key = qtranxf_use($lang, $txt, false);
@@ -751,10 +771,10 @@ function qtranxf_translate_metadata($meta_type, $original_value, $object_id, $me
 	global $q_config;
 	static $meta_cache_unserialized = array();
 	if(!isset($q_config['url_info'])){
-		//qtranxf_dbg_log('qtranxf_filter_postmeta: too early: $object_id='.$object_id.'; $meta_key',$meta_key,true);
+		//qtranxf_dbg_log('qtranxf_translate_metadata: too early: $object_id='.$object_id.'; $meta_key',$meta_key,true);
 		return $original_value;
 	}
-	//qtranxf_dbg_log('qtranxf_filter_postmeta: $object_id='.$object_id.'; $meta_key=',$meta_key);
+	//qtranxf_dbg_log('qtranxf_translate_metadata: $object_id='.$object_id.'; $meta_key=',$meta_key);
 
 	//$meta_type = 'post';
 	$lang = $q_config['language'];
@@ -783,7 +803,7 @@ function qtranxf_translate_metadata($meta_type, $original_value, $object_id, $me
 			$meta_cache = $meta_cache[$object_id];
 		}
 		$meta_unserialized = array();//clear this cache if we are re-doing meta_cache
-		//qtranxf_dbg_log('qtranxf_filter_postmeta: $object_id='.$object_id.'; $meta_cache before:',$meta_cache);
+		//qtranxf_dbg_log('qtranxf_translate_metadata: $object_id='.$object_id.'; $meta_cache before:',$meta_cache);
 		foreach($meta_cache as $mkey => $mval){
 			$meta_unserialized[$mkey] = array();
 			if(strpos($mkey,'_url') !== false){
@@ -812,7 +832,7 @@ function qtranxf_translate_metadata($meta_type, $original_value, $object_id, $me
 				}
 			}
 		}
-		//qtranxf_dbg_log('qtranxf_filter_postmeta: $object_id='.$object_id.'; $meta_cache  after:',$meta_cache);
+		//qtranxf_dbg_log('qtranxf_translate_metadata: $object_id='.$object_id.'; $meta_cache  after:',$meta_cache);
 		wp_cache_set( $object_id, $meta_cache, $cache_key_lang );
 	}
 
@@ -994,6 +1014,31 @@ function qtranxf_updated_usermeta( $meta_id, $object_id, $meta_key, $meta_value 
 	qtranxf_cache_delete_metadata('user', $object_id);
 }
 add_action('updated_usermeta', 'qtranxf_updated_usermeta', 5, 4);
+
+/**
+ * Callback for qtranxf_start_buffering
+ */
+function qtranxf_translate_otput($output){
+	//qtranxf_dbg_log('qtranxf_translate_otput: REQUEST_TIME_FLOAT: ', $_SERVER['REQUEST_TIME_FLOAT']);
+	$blocks = qtranxf_get_language_blocks($output);
+	if(count($blocks)<=1)//no language is encoded in the $output, the most frequent case
+		return $output;
+	global $q_config;
+	$lang = $q_config['language'];
+	$translated = qtranxf_use_block($lang, $blocks, false, true);
+	//$translated = qtranxf_use_language($q_config['language'], $output, true, true);
+	//$translated = qtranxf_useCurrentLanguageIfNotFoundUseDefaultLanguage($output);
+	return $translated;
+}
+
+/**
+ * Buffer the whole output in order to translate it at the end.
+ */
+function qtranxf_start_buffering(){
+	//qtranxf_dbg_log('qtranxf_start_buffering: REQUEST_TIME_FLOAT: ', $_SERVER['REQUEST_TIME_FLOAT']);
+	ob_start('qtranxf_translate_otput');
+}
+add_action( 'template_redirect', 'qtranxf_start_buffering', 5 );
 
 function qtranxf_checkCanonical($redirect_url, $requested_url) {
 	global $q_config;

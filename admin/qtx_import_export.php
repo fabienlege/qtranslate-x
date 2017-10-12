@@ -152,7 +152,7 @@ function qtranxf_add_row_migrate($nm,$plugin,$args=null) {
 	//qtranxf_dbg_log('qtranxf_add_row_migrate: $pd:',$pd);
 	$href = isset($args['href']) ? $args['href'] : 'https://wordpress.org/plugins/'.$plugin;
 ?>
-<tr valign="top" id="qtranslate-<?php echo $plugin; ?>">
+<tr  id="qtranslate-<?php echo $plugin; ?>">
 	<th scope="row"><?php _e('Plugin') ?> <a href="<?php echo $href; ?>/" target="_blank"><?php echo $nm; ?></a></th>
 	<td>
 <?php
@@ -171,7 +171,7 @@ function qtranxf_add_row_migrate($nm,$plugin,$args=null) {
 <?php }
 	}
 	if(!empty($args['note'])){
-		echo '<p class="qtranxs_notes">'.$args['note'].'</p>';
+		echo '<p class="qtranxs-notes">'.$args['note'].'</p>';
 	}
 ?>
 	</td>
@@ -181,21 +181,28 @@ function qtranxf_add_row_migrate($nm,$plugin,$args=null) {
 
 function qtranxf_admin_section_import_export($request_uri)
 {
+	global $q_config;
 	//echo '<div class="tabs-content">';
 	qtranxf_admin_section_start('import');
 ?>
-	<table class="form-table">
-		<tr valign="top" id="qtranslate-convert-database">
+	<table class="form-table qtranxs-form-table" id="qtranxs_import_config">
+		<tr  id="qtranslate-convert-database">
 			<th scope="row"><?php _e('Convert Database', 'qtranslate') ?></th>
 			<td>
 				<?php printf(__('If you are updating from qTranslate 1.x or Polyglot, <a href="%s">click here</a> to convert posts to the new language tag format.', 'qtranslate'), $request_uri.'&convert=true#import') ?>
 				<?php printf(__('If you have installed qTranslate for the first time on a Wordpress with existing posts, you can either go through all your posts manually and save them in the correct language or <a href="%s">click here</a> to mark all existing posts as written in the default language.', 'qtranslate'), $request_uri.'&markdefault=true#import') ?>
 				<?php _e('Both processes are <b>irreversible</b>! Be sure to make a full database backup before clicking one of the links.', 'qtranslate') ?><br/><br/>
 				<label for="qtranxs_convert_database_none"><input type="radio" name="convert_database" id="qtranxs_convert_database_none" value="none" checked />&nbsp;<?php _e('Do not convert database', 'qtranslate') ?></label><br/><br/>
-				<label for="qtranxs_convert_database_to_b_only"><input type="radio" name="convert_database" id="qtranxs_convert_database_to_b_only" value="b_only" />&nbsp;<?php echo __('Convert database to the "square bracket only" style.', 'qtranslate') ?></label><br/>
-				<small><?php printf(__('The square bracket language tag %s only will be used as opposite to dual-tag (%s and %s) %s legacy database format. All string options and standard post and page fields will be uniformly encoded like %s.','qtranslate'),'[:]',esc_html('<!--:-->'),'[:]','qTranslate','"[:en]English[:de]Deutsch[:]"') ?></small><br/><br/>
-				<label for="qtranxs_convert_database_to_c_dual"><input type="radio" name="convert_database" id="qtranxs_convert_database_to_c_dual" value="c_dual" />&nbsp;<?php echo __('Convert database back to the legacy "dual language tag" style.', 'qtranslate') ?></label><br/>
-				<small><?php _e('Note, that only string options and standard post and page fields are affected.','qtranslate') ?></small>
+				<label for="qtranxs_convert_database_to_b_only"><input type="radio" name="convert_database" id="qtranxs_convert_database_to_b_only" value="b_only" />&nbsp;<?php echo __('Convert database to the "square bracket only" style.', 'qtranslate') ?><br/>
+				<small><?php printf(__('The square bracket language tag %s only will be used as opposite to dual-tag (%s and %s) %s legacy database format. All string options and standard post and page fields will be uniformly encoded like %s.','qtranslate'),'[:]',esc_html('<!--:-->'),'[:]','qTranslate','"[:en]English[:de]Deutsch[:]"') ?></small></label><br/><br/>
+				<label for="qtranxs_convert_database_to_c_dual"><input type="radio" name="convert_database" id="qtranxs_convert_database_to_c_dual" value="c_dual" />&nbsp;<?php echo __('Convert database back to the legacy "dual language tag" style.', 'qtranslate') ?><br/>
+				<small><?php _e('Note, that only string options and standard post and page fields are affected.','qtranslate') ?></small></label><br/><br/>
+				<label for="qtranxs_db_clean_terms"><input type="radio" name="convert_database" id="qtranxs_db_clean_terms" value="db_clean_terms" />&nbsp;<?php echo __('Clean Legacy Term Names', 'qtranslate') ?><br/>
+				<small><?php _e('Clean the inconsistencies of the q-original way to store term names. Translations for some tags, categories or other terms may get lost and may need to be re-entered after this operation. The term names should stay consistent in the future.','qtranslate') ?></small></label><br/><br/>
+				<label for="qtranxs_db_split"><input type="radio" name="convert_database" id="qtranxs_db_split" value="db_split" />&nbsp;<?php echo __('Split database file by language.', 'qtranslate') ?>&nbsp;
+				<?php echo sprintf(__('Provide full file path to the input multilingual %s database file (the resulting %s files, named with language-based suffix, are saved in the same folder, where the input file is):', 'qtranslate'), '.sql', '.sql') ?></label><br/><input type="text" class="widefat" name="db_file" id="qtranxs_db_file" value="<?php if(!empty($q_config['db_file'])) echo $q_config['db_file']; ?>" /><br/><br/>
+				<?php echo __('Specify which languages to keep in the main output file. Provide a comma-separated list of two-letter codes of languages to keep. If left empty, the database is split by language into a set of language-tags-free database files.', 'qtranslate') ?><br/><input type="text" class="widefat" name="db_langs" id="qtranxs_db_langs" value="<?php if(!empty($q_config['db_langs'])) echo $q_config['db_langs']; ?>" /><br/><br/>
+				<small><?php echo sprintf(__('In order to remove one or more languages from entire database, you may dump the database into a %s file, then run this procedure and upload one of the new clean %s files back to the server. A separate clean database will also be saved fir each excluded language.', 'qtranslate'), '.sql', '.sql')//.sprintf(__('%sRead more%s.', 'qtranslate'), '&nbsp;<a href="">', '</a>') ?></small>
 			</td>
 		</tr>
 		<?php qtranxf_add_row_migrate('qTranslate','qtranslate', array('compatible' => true)) ?>
@@ -204,7 +211,7 @@ function qtranxf_admin_section_import_export($request_uri)
 		<?php qtranxf_add_row_migrate('zTranslate','ztranslate', array('compatible' => true)) ?>
 		<?php qtranxf_add_row_migrate('WPML Multilingual CMS','sitepress-multilingual-cms', array('href' => 'https://wpml.org', 'text' => sprintf(__('Use plugin %s to import data.', 'qtranslate'), '<a href="https://wordpress.org/plugins/w2q-wpml-to-qtranslate/" target="_blank">W2Q: WPML to qTranslate</a>'))) ?>
 		<?php do_action('qtranslate_add_row_migrate') ?>
-		<tr valign="top">
+		<tr>
 			<th scope="row"><?php _e('Reset qTranslate', 'qtranslate') ?></th>
 			<td>
 				<label for="qtranslate_reset"><input type="checkbox" name="qtranslate_reset" id="qtranslate_reset" value="1"/> <?php _e('Check this box and click Save Changes to reset all qTranslate settings.', 'qtranslate') ?></label>

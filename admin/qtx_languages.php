@@ -155,15 +155,19 @@ function qtranxf_disableLanguage($lang){
 
 function qtranxf_enableLanguage($lang){
 	global $q_config;
-	if(qtranxf_isEnabled($lang))// || !isset($q_config['language_name'][$lang]))
+	if(qtranxf_isEnabled($lang))
 		return false;
+
 	$q_config['enabled_languages'][] = $lang;
+	qtranxf_load_languages_enabled();
+	qtranxf_update_config_header_css();
 
 	qtranxf_load_languages_enabled();
 	qtranxf_update_config_header_css();
 
 	// force update of .mo files
-	if ($q_config['auto_update_mo']) qtranxf_updateGettextDatabases(true, $lang);
+	if ($q_config['auto_update_mo'])
+		qtranxf_updateGettextDatabases(true, $lang);
 
 	return true;
 }

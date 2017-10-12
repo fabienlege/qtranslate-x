@@ -28,16 +28,11 @@ function qtranxf_slug_config($request_uri) {
 	$nopermalinks = qtranxf_is_permalink_structure_query();
 	qtranxf_admin_section_start('slugs');
 ?>
-<table class="form-table" id="qtranxf_slug_config">
-<?php if($nopermalinks){ ?>
-	<tr>
-		<th scope="row" colspan="2"><?php printf(__('You have to use pretty %spermalinks%s in order to take advantage of multilingual slugs.', 'qtranslate'), '<a href="'.admin_url('options-permalink.php').'">', '</a>') ?></th>
-	</tr>
-<?php }else{ ?>
+<table class="form-table qtranxs-form-table" id="qtranxs_slug_config">
 	<tr>
 		<th scope="row"><?php _e('Translate Slugs', 'qtranslate') ?></th>
-		<td><input type="checkbox" name="slugs" id="qtranxs_slugs"<?php checked(!empty($q_config['slugs'])) ?>  value="1"><label for="qtranxs_slugs" class="qtranxs_explanation"><?php printf(__('Enable multilingual URL slugs for posts, pages, categories, post types, tags, etc.', 'qtranslate')) ?></label>
-		<p class="qtranxs_notes"><?php printf(__('Make sure to deactivate all other 3rd-party slug services. You may need to %simport slug data%s from other slug-plugins upon activation this service.', 'qtranslate'), '<a href="'.$request_uri.'#import">', '</a>').' '.printf(__('It is important to read %sLocalized Slugs Guide%s to prevent other possible confusions.', 'qtranslate'), '<a href="https://qtranslatexteam.wordpress.com/slugs/" target="_blank">', '</a>') ?></p>
+		<td><input type="checkbox" name="slugs" id="qtranxs_slugs"<?php checked(!empty($q_config['slugs'])) ?>  value="1" /><label for="qtranxs_slugs" class="qtranxs_explanation"><?php printf(__('Enable multilingual URL slugs for posts, pages, categories, post types, tags, etc.', 'qtranslate')) ?></label>
+		<p class="qtranxs-notes"><?php printf(__('Make sure to deactivate all other 3rd-party slug services. You may need to %simport slug data%s from other slug-plugins upon activation this service. Please, read %sMigration Guide%s for more information.', 'qtranslate'), '<a href="'.$request_uri.'#import">', '</a>', '<a href="https://qtranslatexteam.wordpress.com/migration/" target="_blank">', '</a>') ?></p>
 		</td>
 	</tr>
 <?php
@@ -54,8 +49,8 @@ function qtranxf_slug_config($request_uri) {
 	if(!empty($objects)){
 ?>
 	<tr>
-		<th scope="row" class="qtranxs_option_group"><?php _e('Built-in Taxonomies', 'qtranslate') ?></th>
-		<td><p class="qtranxs_explanation"><?php printf(__('Multilingual slug base for WordPress built-in taxonomies. The default language value is defined by %sWordPress%s on admin page %s.', 'qtranslate'), '<a href="https://codex.wordpress.org/Taxonomies" target="_blank">', '</a>', '<a href="'.admin_url('options-permalink.php').'" target="_blank">'.qtranxf_translate_wp('Settings').'/'.qtranxf_translate_wp('Permalinks').'</a>') ?></p>
+		<th scope="row" class="qtranxs-option-group"><?php _e('Built-in Taxonomies', 'qtranslate') ?></th>
+		<td><p class="qtranxs_explanation"><?php printf(__('Multilingual slug for WordPress built-in taxonomies. The default value is defined by %sWordPress%s.', 'qtranslate'), '<a href="https://codex.wordpress.org/Taxonomies" target="_blank">', '</a>') ?></p>
 		</td>
 	</tr>
 <?php
@@ -70,8 +65,8 @@ function qtranxf_slug_config($request_uri) {
 	if(!empty($objects)){
 ?>
 	<tr>
-		<th scope="row" class="qtranxs_option_group"><?php _e('Custom Taxonomies', 'qtranslate') ?></th>
-		<td><p class="qtranxs_explanation"><?php echo __('Multilingual slug base for custom taxonomies.', 'qtranslate').' '; printf(__('The default language value is as provided in the argument %s of a call to function %s made by a 3rd-party, which created the term.', 'qtranslate'), '<code>$args[\'rewrite\'][\'slug\']</code>', '<a href="http://codex.wordpress.org/Function_Reference/register_taxonomy" target="_blank"><code>register_taxonomy</code></a>') ?></p>
+		<th scope="row" class="qtranxs-option-group"><?php _e('Custom Taxonomies', 'qtranslate') ?></th>
+		<td><p class="qtranxs_explanation"><?php echo __('Multilingual slug for custom taxonomies.', 'qtranslate').' '; printf(__('The default is value of argument %s as provided in the call of function %s.', 'qtranslate'), '<code>$taxonomy</code>', '<a href="http://codex.wordpress.org/Function_Reference/register_taxonomy" target="_blank"><code>register_taxonomy</code></a>') ?></p>
 		</td>
 	</tr>
 <?php
@@ -98,8 +93,8 @@ function qtranxf_slug_config($request_uri) {
 	if(!empty($objects)){
 ?>
 	<tr>
-		<th scope="row" class="qtranxs_option_group"><?php _e('Custom Post Types', 'qtranslate') ?></th>
-		<td><p class="qtranxs_explanation"><?php echo __('Multilingual slug base for custom post types.', 'qtranslate').' '; printf(__('The default language value is as provided in the argument %s of a call to function %s made by a 3rd-party, which created the term.', 'qtranslate'), '<code>$args[\'rewrite\'][\'slug\']</code>', '<a href="http://codex.wordpress.org/Function_Reference/register_post_type" target="_blank"><code>register_post_type</code></a>') ?></p>
+		<th scope="row" class="qtranxs-option-group"><?php _e('Custom Post Types', 'qtranslate') ?></th>
+		<td><p class="qtranxs_explanation"><?php echo __('Multilingual slug for post types.', 'qtranslate').' '; printf(__('The default is value of argument %s as provided in the call of function %s.', 'qtranslate'), '<code>$post_type</code>', '<a href="http://codex.wordpress.org/Function_Reference/register_post_type" target="_blank"><code>register_post_type</code></a>') ?></p>
 		</td>
 	</tr>
 <?php

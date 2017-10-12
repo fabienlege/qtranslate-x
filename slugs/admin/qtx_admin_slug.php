@@ -1,10 +1,66 @@
 <?php
 if ( !defined( 'WP_ADMIN' ) ) exit;
 
-{//updates
-/**
- * @param (string) $name - urldecoded post name or other single slug (not a path with '/').
-*/
+function qtranxf_regroup_translations( &$qfields, &$request, $edit_lang, $default_lang ) {
+	if(isset($qfields['qtranslate-original-value'])){
+		global $q_config;
+		$original_value = $qfields['qtranslate-original-value'];
+		if(qtranxf_isMultilingual($original_value)){
+			$langs = qtranxf_split($original_value);
+			$original_value = $langs[$default_lang];
+			$qfields['qtranslate-original-value'] =  $original_value;
+		}
+		if(qtranxf_isMultilingual($request)){
+			$qfields = qtranxf_split($request);
+			$qfields['qtranslate-original-value'] =  $original_value;
+		}else{
+			$qfields[$edit_lang] = $request;
+		}
+		// make sure the default language value is provided
+		qtranxf_ensure_language_set( $qfields, $default_lang, $original_value);
+		$request = $qfields[$edit_lang];
+		//$request = qtranxf_join_b($qfields);
+	}else{
+		foreach($qfields as $nm => &$vals){
+			if(!isset($request[$nm])){
+				unset($qfields[$nm]);
+				continue;
+			}
+			qtranxf_regroup_translations($vals,$request[$nm],$edit_lang,$default_lang); // recursive call
+		}
+	}
+}
+
+function qtranxf_regroup_translations_for( $type, $edit_lang, $default_lang ) {
+	if(!isset($_REQUEST[$type])) return;
+	foreach($_REQUEST[$type] as $nm => &$qfields){
+		if(!isset($_REQUEST[$nm])){
+			unset($_REQUEST[$type][$nm]);
+			continue;
+		}
+		qtranxf_regroup_translations($qfields,$_REQUEST[$nm],$edit_lang,$default_lang);
+		if(isset($_POST[$nm])){
+			$_POST[$nm] = $_REQUEST[$nm];
+			$_POST[$type][$nm] = $_REQUEST[$type][$nm];
+		}
+		if(isset($_GET[$nm])){
+			$_GET[$nm] = $_REQUEST[$nm];
+			$_GET[$type][$nm] = $_REQUEST[$type][$nm];
+		}
+	}
+}// */
+
+function qtranxf_slug_collect_translations_posted() {
+	if(isset($_REQUEST['qtranslate-slugs']))){
+		//ensure REQUEST has the value of the default language
+		//multilingual slug/term values will be processed later
+		$edit_lang = qtranxf_getLanguageEdit();
+		$default_lang = qtranxf_getLanguageDefault();
+		qtranxf_regroup_translations_for('qtranslate-slugs', $edit_lang, $default_lang);
+	}
+}
+add_action('plugins_loaded', 'qtranxf_slug_collect_translations_posted', 6);
+
 function qtranxf_slug_update_translations( $name, &$qfields, $default_lang ) {
 	global $q_config, $wpdb;
 
@@ -57,13 +113,15 @@ function qtranxf_slug_update_translations( $name, &$qfields, $default_lang ) {
 }
 
 function qtranxf_slug_clean_request($nm){
-	//qtranxf_dbg_log('qtranxf_slug_clean_request: $nm='.$nm.'; REQUEST[qtranslate-slugs]: ', $_REQUEST['qtranslate-slugs']);
+	qtranxf_clean_request_of('qtranslate-slugs',$nm);
+/*
 	unset($_GET['qtranslate-slugs'][$nm]);
 	unset($_POST['qtranslate-slugs'][$nm]);
 	unset($_REQUEST['qtranslate-slugs'][$nm]);
 	if(empty($_GET['qtranslate-slugs'])) unset($_GET['qtranslate-slugs']);
 	if(empty($_POST['qtranslate-slugs'])) unset($_POST['qtranslate-slugs']);
 	if(empty($_REQUEST['qtranslate-slugs'])) unset($_REQUEST['qtranslate-slugs']);
+*/
 }
 
 function qtranxf_slug_has_post_name($post_type,$post_status){
@@ -380,15 +438,11 @@ function qtranxf_slug_delete_term($term_id, $tt_id, $taxonomy, $deleted_term){
 add_action( 'delete_term', 'qtranxf_slug_delete_term', 10, 4 );
 
 function qtranxf_slug_update_translations_left(){
-	if(!isset($_REQUEST['qtranslate-slugs'])){
-		//qtranxf_dbg_log('qtranxf_slug_update_translations_left: no $_REQUEST[qtranslate-slugs]');
-		return;
-	}
-	//qtranxf_dbg_log('qtranxf_slug_update_translations_left: $_REQUEST[qtranslate-slugs]: ', $_REQUEST['qtranslate-slugs']);
-	$default_lang = qtranxf_getLanguage();
-	foreach($_REQUEST['qtranslate-slugs'] as $key => &$qfields){
-		qtranxf_slug_update_translations_for( $key, $qfields, $default_lang );
-		qtranxf_slug_clean_request($key);
+	if(!isset($_REQUEST['qtranslate-slugs'])) return;
+	$default_lang = qtranxf_getLanguageDefault();
+	foreach($_REQUEST['qtranslate-slugs'] as $name => &$qfields){
+		qtranxf_slug_update_translations_for( $name, $qfields, $default_lang );
+		qtranxf_slug_clean_request($name);
 	}
 }
 add_action('admin_head', 'qtranxf_slug_update_translations_left', 5);

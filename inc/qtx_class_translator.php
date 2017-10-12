@@ -4,7 +4,9 @@ if ( !defined( 'ABSPATH' ) ) exit;
 require_once(QTRANSLATE_DIR.'/inc/i18n-interface.php');
 require_once(QTRANSLATE_DIR.'/qtranslate_options.php');
 require_once(QTRANSLATE_DIR.'/qtranslate_utils.php');
+require_once(QTRANSLATE_DIR.'/inc/qtx_init.php');
 require_once(QTRANSLATE_DIR.'/qtranslate_core.php');
+require_once(QTRANSLATE_DIR.'/inc/qtx_taxonomy.php');
 
 require_once(QTRANSLATE_DIR.'/qtranslate_widget.php');
 
@@ -29,6 +31,19 @@ class QTX_Translator implements WP_Translator
 		//add_filter('translate_time', 'qtranxf_', 10, 2);
 	}
 
+	public function get_language() {
+		global $q_config;
+		return $q_config['language'];
+	}
+
+	public function set_language($lang){
+		global $q_config;
+		$lang_curr = $q_config['language'];
+		if(qtranxf_isEnabled($lang))
+			$q_config['language'] = $lang;
+		return $lang_curr;
+	}
+
 	public function translate_text($text, $lang=null, $flags=0) {
 		global $q_config;
 		if(!$lang) $lang = $q_config['language'];
@@ -40,7 +55,7 @@ class QTX_Translator implements WP_Translator
 	public function translate_term($term, $lang=null, $taxonomy=null) {
 		global $q_config;
 		if(!$lang) $lang = $q_config['language'];
-		return qtranxf_use_term($lang, $term, $taxonomy);
+		return qtranxf_term_use($lang, $term, $taxonomy);
 	}
 
 	public function translate_url($url, $lang=null) {

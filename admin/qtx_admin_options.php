@@ -14,6 +14,7 @@ function qtranxf_admin_set_default_options(&$ops){
 
 	$ops['admin']['bool']=array(
 		'auto_update_mo' => true,// automatically update .mo files
+		'hide_lsb_copy_content' => false
 	);
 
 	//single line options

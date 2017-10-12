@@ -147,6 +147,25 @@ function qtranxf_editConfig(){
 			$original_lang = '';
 		}
 	}
+	elseif(isset($_POST['lic_key'])){
+		$lic_key = sanitize_text_field(stripslashes($_POST['lic_key']));
+		$lic_url = sanitize_text_field(stripslashes($_POST['lic_url']));
+		if(empty($lic_key)){
+			$errors[] = __('License Key cannot be empty.', 'qtranslate');
+		}elseif(empty($lic_url)){
+			$errors[] = __('License URL cannot be empty.', 'qtranslate');
+		}else{
+			$code = qtranxf_license_update( $lic_url, $lic_key );
+			switch($code){
+				case QTX_LIC_TYPE_PRODUCTION: $messages[] = __('License has been successfully imported.', 'qtranslate'); break;
+				case QTX_LIC_TYPE_LOCALHOST: $errors[] = sprintf(__('It does not make sense to register license for %s. Please, enter a URL where this the plugin will run after testing is finished.', 'qtranslate'), '<em>localhost</em>'); break;
+				case QTX_LIC_TYPE_INVALID:
+				default: $errors[] = sprintf(__('License cannot be validated for URL "%s". Please, try again.', 'qtranslate'), $lic_url); break;
+			}
+		}
+		$_POST['lic_key'] = $lic_key;
+		$_POST['lic_url'] = $lic_url;
+	}
 	elseif(isset($_GET['convert'])){
 		// update language tags
 		global $wpdb;
@@ -805,17 +824,18 @@ function qtranxf_updateSettings(){
 			$_POST['config_files'] = array();
 			unset($_POST['json_config_files']);
 		}else{
+			$json_config_files = implode(PHP_EOL,$json_files);
+			$_POST['json_config_files'] = $json_config_files;
 			$nerr = isset($q_config['url_info']['errors']) ? count($q_config['url_info']['errors']) : 0;
 			$cfg = qtranxf_load_config_files($json_files);
 			if(!empty($q_config['url_info']['errors']) && $nerr != count($q_config['url_info']['errors'])){//new errors occurred
-				$_POST['json_config_files'] = implode(PHP_EOL,$json_files);
 				remove_action('admin_notices', 'qtranxf_admin_notices_errors');
 				if($json_files == $q_config['config_files']){
 					//option is not changed, apparently something happened to files, then make the error permanent
 					update_option('qtranslate_config_errors',array_slice($q_config['url_info']['errors'],$nerr));
 				}
 			}else{
-				$_POST['config_files'] = implode(PHP_EOL,$json_files);
+				$_POST['config_files'] = $json_config_files;
 				unset($_POST['json_config_files']);
 				delete_option('qtranslate_config_errors');
 			}
@@ -898,106 +918,29 @@ function qtranxf_executeOnUpdate() {
 	// ==== import/export msg was here
 
 	if(isset($_POST['convert_database'])){
+		require_once(QTRANSLATE_DIR.'/admin/qtx_admin_utils_db.php');
 		$msg = qtranxf_convert_database($_POST['convert_database']);
 		if($msg) $messages[] = $msg;
 	}
 }
 
-function qtranxf_translate_dt_format($fmt,$lang=null){
+function qtranxf_mark_default($text) {
 	global $q_config;
-	if(empty($lang)) $lang = $q_config['language'];
-	switch($fmt){
-		case 'date_format': $fmt = 'F j, Y'; break;
-		case 'time_format': $fmt = 'g:i a'; break;
-		case 'date_time_format': $fmt = 'F j, Y g:i a'; break;
-	}
-	if(empty($q_config['locale'][$lang])){
-		$locales = qtranxf_language_configured('locale');
-		if(empty($locales[$lang])) return $fmt;
-		$loc = $locales[$lang];
-	}else{
-		$loc = $q_config['locale'][$lang];
-	}
-	$text_domain = 'locale-'.$loc;
-	if(!isset($l10n[$text_domain])){
-		$mo = WP_LANG_DIR.'/'.$loc.'.mo';
-		if(!load_textdomain($text_domain,$mo)){
-			qtranxf_updateGettextDatabases(true,$lang);
-			load_textdomain($text_domain,$mo);
+	$blocks = qtranxf_get_language_blocks($text);
+	if( count($blocks) > 1 ) return $text;//already have other languages.
+	$content=array();
+	foreach($q_config['enabled_languages'] as $language) {
+		if($language == $q_config['default_language']) {
+			$content[$language] = $text;
+		}else{
+			$content[$language] = '';
 		}
 	}
-	$translations = get_translations_for_domain($text_domain);
-	if(isset($translations->entries[$fmt])){
-		$fmt = $translations->entries[$fmt]->translations[0];
-	}
-	return $fmt;
+	return qtranxf_join_b($content);
 }
 
-function qtranxf_get_date_time_formats(&$date_format,&$time_format){
-	if(!$date_format) $date_format = get_option('date_format');
-	if(!$time_format) $time_format = get_option('time_format');
-}
-
-function qtranxf_set_default_date_i18n(&$cfg,$enabled_languages,$date_format=null,$time_format=null){
-	qtranxf_get_date_time_formats($date_format,$time_format);
-	$changed = false;
-	foreach($enabled_languages as $lang){
-		if(qtranxf_set_date_i18n_formats($cfg,$lang,$date_format,$time_format)) $changed = true;
-	}
-	//qtranxf_dbg_log('qtranxf_set_date_i18n_formats: $cfg[date_i18n]: ',$cfg['date_i18n']);
-	return $changed;
-}
-
-function qtranxf_set_date_i18n_formats(&$cfg, $lang, $date_format=null, $time_format=null){
-	qtranxf_get_date_time_formats($date_format,$time_format);
-	$changed = !isset($cfg['date_i18n']) || !is_array($cfg['date_i18n']);
-	if($changed) $cfg['date_i18n'] = array();
-	if(qtranxf_set_date_i18n_format($cfg, $lang, 'date_format', $date_format)) $changed = true;
-	if(qtranxf_set_date_i18n_format($cfg, $lang, 'time_format', $time_format)) $changed = true;;
-	return $changed;
-}
-
-function qtranxf_set_date_i18n_format(&$cfg, $lang, $name, $format){
-	$changed = false;
-	$date_i18n = &$cfg['date_i18n'];
-	if(!empty($date_i18n[$name]) && $format != $date_i18n[$name]){
-		$f = $date_i18n[$name];
-		$fmts = $date_i18n[$f];
-		$date_i18n[$format] = $fmts;
-		unset($date_i18n[$f]);
-		$changed = true;
-	}
-	if(empty($date_i18n[$name]) || $date_i18n[$name] != $format){
-		$date_i18n[$name] = $format;
-		$changed = true;
-	}
-	if(empty($cfg[$name][$lang])){
-		$lng_format = qtranxf_translate_dt_format($name,$lang);
-	}else{
-		$lng_format = qtranxf_convert_strftime2date($cfg[$name][$lang]);
-	}
-	if(empty($lng_format) || $lng_format == $format){
-		if(isset($date_i18n[$format][$lang])){
-			unset($date_i18n[$format][$lang]);
-			$changed = true;
-		}
-	}else{
-		if((empty($date_i18n[$format][$lang]) || $date_i18n[$format][$lang] != $lng_format)){
-			$date_i18n[$format][$lang] = $lng_format;
-			$changed = true;
-		}
-	}
-	return $changed;
-}
-
-function qtranxf_sync_date_i18n_config($date_format=null, $time_format=null){
-	global $q_config;
-	qtranxf_get_date_time_formats($date_format,$time_format);
-	$date_i18n = get_option('qtranslate_date_i18n');
-	if(is_array($date_i18n)) $q_config['date_i18n'] = $date_i18n;
-	if(qtranxf_set_default_date_i18n($q_config,$q_config['enabled_languages'],$date_format,$time_format))
-		update_option('qtranslate_date_i18n',$q_config['date_i18n']);
-}
+//function qtranxf_updateLanguage() {
+//}
 
 /**
  * Allow 3rd-party to include additional code here
